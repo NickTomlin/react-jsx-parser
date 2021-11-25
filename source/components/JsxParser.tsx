@@ -115,10 +115,18 @@ export default class JsxParser extends React.Component<TProps> {
 			return undefined
 		case 'CallExpression':
 			const parsedCallee = this.#parseExpression(expression.callee)
+			// TODO: we have the callee here, we need to somehow make the caller aware of it...
+			// otherwise our params won't actualy be bound
+			// or maybe we are just not thinking about this the right way...
 			if (parsedCallee === undefined) {
 				this.props.onError!(new Error(`The expression '${expression.callee}' could not be resolved, resulting in an undefined return value.`))
 				return undefined
 			}
+			// we have the "object" this is on, we could bind to it
+			// we have a bound array here, which is _good_ the issue is that
+			// the context doesn't get bound for our call...
+			// I wonder if we could just bind it above??
+			console.log('our parsed callee is', parsedCallee, expression.callee)
 			return parsedCallee(...expression.arguments.map(this.#parseExpression))
 		case 'ConditionalExpression':
 			return this.#parseExpression(expression.test)
@@ -162,10 +170,27 @@ export default class JsxParser extends React.Component<TProps> {
 			case '!': return !expression.argument.value
 			}
 			return undefined
+		case 'ArrowFunctionExpression':
+			if (expression.async || expression.generator) {
+				this.props.onError?.(new Error('Async and generator arrow functions are not supported.'))
+			}
+			// we need to look up the params here...
+			// or bind them to something
+			console.log('params', expression.params)
+			// TODO: we are evaluating with this function but we really want to call the
+			// arrow expression with the correct context
+			// it's almost like we need our own mini parse here
+			// to set the correct context
+			// can we "clone" the scope somehow?
+
+			return function ArrowClosure (item) {
+				return <Fragment>{item}</Fragment>
+			}
 		}
 	}
 
 	#parseMemberExpression = (expression: AcornJSX.MemberExpression): any => {
+		console.log('!!! member !!!', expression, expression.object.type)
 		// eslint-disable-next-line prefer-destructuring
 		let { object } = expression
 		const path = [expression.property?.name ?? JSON.parse(expression.property?.raw ?? '""')]

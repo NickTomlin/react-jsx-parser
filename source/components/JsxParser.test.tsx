@@ -1238,4 +1238,55 @@ describe('JsxParser Component', () => {
 			expect(component.ParsedChildren[0].props.children[1].key).toBeFalsy()
 		})
 	})
+	it('simple sanity', () => {
+		const { html } = render(
+			<JsxParser
+				bindings={{ items: [1] }}
+				jsx={
+					'<div>{items[0]}</div>'
+					// '<div>'
+					// + '{items.map(item => "hi")}'
+					// + '</div>'
+				}
+			/>
+		)
+		console.log(html)
+		expect(html).toEqual('<div class=\"jsx-parser\"><div>1</div></div>')
+	})
+
+	it('simple sanity map', () => {
+		const { html } = render(
+			<JsxParser
+				bindings={{
+					items: [2],
+					identity: (arg) => arg
+				}}
+				jsx={
+					'<div>{items.map(identity)}</div>'
+					// '<div>'
+					// + '{items.map(item => "hi")}'
+					// + '</div>'
+				}
+			/>
+		)
+		console.log(html)
+		expect(html).toEqual('<div class=\"jsx-parser\"><div>2</div></div>')
+	})
+
+	it('supports simple functions that directly return simple values', () => {
+		// https://astexplorer.net/#/gist/fc48b12b8410a4ef779e0477a644bb06/cdbfc8b929b31e11e577dceb88e3a1ee9343f68e
+		const { component, html } = render(
+			<JsxParser
+				bindings={{ items: [1] }}
+				jsx={
+					'{items.map(item => <p>{item}</p>)}'
+					// '<div>'
+					// + '{items.map(item => "hi")}'
+					// + '</div>'
+				}
+			/>
+		)
+		console.log(html)
+		expect(html).toEqual('<div class=\"jsx-parser\"><p>1</p></div>')
+	})
 })
