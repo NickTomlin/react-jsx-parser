@@ -1277,7 +1277,7 @@ describe('JsxParser Component', () => {
 		// https://astexplorer.net/#/gist/fc48b12b8410a4ef779e0477a644bb06/cdbfc8b929b31e11e577dceb88e3a1ee9343f68e
 		const { component, html } = render(
 			<JsxParser
-				bindings={{ items: [1] }}
+				bindings={{ items: [1, 2] }}
 				jsx={
 					'{items.map(item => <p>{item}</p>)}'
 					// '<div>'
@@ -1287,6 +1287,6 @@ describe('JsxParser Component', () => {
 			/>
 		)
 		console.log(html)
-		expect(html).toEqual('<div class=\"jsx-parser\"><p>1</p></div>')
+		expect(html).toEqual('<div class=\"jsx-parser\"><p>1</p><p>2</p></div>')
 	})
 })

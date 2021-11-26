@@ -76,16 +76,16 @@ export default class JsxParser extends React.Component<TProps> {
 		return parsed.map(this.#parseExpression).filter(Boolean)
 	}
 
-	#parseExpression = (expression: AcornJSX.Expression): any => {
+	#parseExpression = (expression: AcornJSX.Expression, context?: any): any => {
 		switch (expression.type) {
 		case 'JSXAttribute':
 			if (expression.value === null) return true
 			return this.#parseExpression(expression.value)
 		case 'JSXElement':
 		case 'JSXFragment':
-			return this.#parseElement(expression)
+			return this.#parseElement(expression, context)
 		case 'JSXExpressionContainer':
-			return this.#parseExpression(expression.expression)
+			return this.#parseExpression(expression.expression, context)
 		case 'JSXText':
 			const key = this.props.disableKeyGeneration ? undefined : randomHash()
 			return this.props.disableFragments
@@ -127,7 +127,7 @@ export default class JsxParser extends React.Component<TProps> {
 			// the context doesn't get bound for our call...
 			// I wonder if we could just bind it above??
 			console.log('our parsed callee is', parsedCallee, expression.callee)
-			return parsedCallee(...expression.arguments.map(this.#parseExpression))
+			return parsedCallee(...expression.arguments.map(arg => this.#parseExpression(arg, expression.callee)))
 		case 'ConditionalExpression':
 			return this.#parseExpression(expression.test)
 				? this.#parseExpression(expression.consequent)
@@ -135,7 +135,25 @@ export default class JsxParser extends React.Component<TProps> {
 		case 'ExpressionStatement':
 			return this.#parseExpression(expression.expression)
 		case 'Identifier':
-			return (this.props.bindings || {})[expression.name]
+			// we eventually get to a place where
+			// this.props.bindings = {
+			//   "items": [
+			//     1,
+			//     2
+			//   ]
+			// }
+			// expression.name = item
+			// but this cannot resolve
+			// because the context is wrong
+
+			// we can pass the context along, but it's still not going to work
+			// because we can't map the lambda reference to the context that's been passed in.
+			// we need a way of resetting this somehow
+			if (context?.[expression.name]) {
+				return context?.[expression.name]
+			} else {
+				return (this.props.bindings || {})[expression.name]
+			}
 		case 'Literal':
 			return expression.value
 		case 'LogicalExpression':
@@ -146,7 +164,7 @@ export default class JsxParser extends React.Component<TProps> {
 			}
 			return false
 		case 'MemberExpression':
-			return this.#parseMemberExpression(expression)
+			return this.#parseMemberExpression(expression, context)
 		case 'ObjectExpression':
 			const object: Record<string, any> = {}
 			expression.properties.forEach(prop => {
@@ -174,28 +192,89 @@ export default class JsxParser extends React.Component<TProps> {
 			if (expression.async || expression.generator) {
 				this.props.onError?.(new Error('Async and generator arrow functions are not supported.'))
 			}
-			// we need to look up the params here...
-			// or bind them to something
-			console.log('params', expression.params)
-			// TODO: we are evaluating with this function but we really want to call the
-			// arrow expression with the correct context
-			// it's almost like we need our own mini parse here
-			// to set the correct context
-			// can we "clone" the scope somehow?
+			// this is a step in the right direction, since the data is bound corectly to `args`
+			return (...args: any[]) : any => {
+				/*
+				args:
+				1st time: [1, 0, [1, 2]]
+				2nd time: [2, 1, [1, 2]]
 
-			return function ArrowClosure (item) {
-				return <Fragment>{item}</Fragment>
+				expression.body: {
+  "type": "JSXElement",
+  "start": 25,
+  "end": 38,
+  "openingElement": {
+    "type": "JSXOpeningElement",
+    "start": 25,
+    "end": 28,
+    "attributes": [],
+    "name": {
+      "type": "JSXIdentifier",
+      "start": 26,
+      "end": 27,
+      "name": "p"
+    },
+    "selfClosing": false
+  },
+  "closingElement": {
+    "type": "JSXClosingElement",
+    "start": 34,
+    "end": 38,
+    "name": {
+      "type": "JSXIdentifier",
+      "start": 36,
+      "end": 37,
+      "name": "p"
+    }
+  },
+  "children": [
+    {
+      "type": "JSXExpressionContainer",
+      "start": 28,
+      "end": 34,
+      "expression": {
+        "type": "Identifier",
+        "start": 29,
+        "end": 33,
+        "name": "item"
+      }
+    }
+  ]
+}
+
+
+Is there a way we can bind these properly, so as to get things to complete properly?
+
+if `item` was a binding or property.
+
+parseExpression
+   JSXElement ->
+		jsxExpressionConatiner
+			-> JSXOpen
+				-> JSXEXpressionContainer
+					 -> Identiifer (item) * BOOM * `item` is not bound...
+				 */
+				const paramContext: Record<string, any> = {}
+				expression.params.forEach((param, idx) => {
+					paramContext[param.name] = args[idx]
+				})
+
+				const result = this.#parseExpression(expression.body, paramContext)
+				return result
+				// return <Fragment>hi: {args[0]}
+				// </Fragment>
 			}
 		}
 	}
 
-	#parseMemberExpression = (expression: AcornJSX.MemberExpression): any => {
-		console.log('!!! member !!!', expression, expression.object.type)
+	#parseMemberExpression = (expression: AcornJSX.MemberExpression, context: any): any => {
+		if (context) console.log('CONTEXT', JSON.stringify(context))
 		// eslint-disable-next-line prefer-destructuring
 		let { object } = expression
 		const path = [expression.property?.name ?? JSON.parse(expression.property?.raw ?? '""')]
 
 		if (expression.object.type !== 'Literal') {
+			console.log('literal', expression)
 			while (object && ['MemberExpression', 'Literal'].includes(object?.type)) {
 				const { property } = (object as AcornJSX.MemberExpression)
 				if ((object as AcornJSX.MemberExpression).computed) {
@@ -212,10 +291,12 @@ export default class JsxParser extends React.Component<TProps> {
 		try {
 			let parent = target
 			const member = path.reduce((value, next) => {
+				console.log('next', next)
 				parent = value
 				return value[next]
 			}, target)
-			if (typeof member === 'function') return member.bind(parent)
+			console.log('mem', parent, context)
+			if (typeof member === 'function') return member.bind(context || parent)
 
 			return member
 		} catch {
@@ -231,6 +312,7 @@ export default class JsxParser extends React.Component<TProps> {
 
 	#parseElement = (
 		element: AcornJSX.JSXElement | AcornJSX.JSXFragment,
+		context: any,
 	): JSX.Element | JSX.Element[] | null => {
 		const { allowUnknownElements, components, componentsOnly, onError } = this.props
 		const { children: childNodes = [] } = element
@@ -248,7 +330,7 @@ export default class JsxParser extends React.Component<TProps> {
 			.map(tag => tag.trim().toLowerCase()).filter(Boolean)
 
 		if (/^(html|head|body)$/i.test(name)) {
-			return childNodes.map(c => this.#parseElement(c)) as JSX.Element[]
+			return childNodes.map(c => this.#parseElement(c, context)) as JSX.Element[]
 		}
 		const tagName = name.trim().toLowerCase()
 		if (blacklistedTags.indexOf(tagName) !== -1) {
@@ -274,7 +356,7 @@ export default class JsxParser extends React.Component<TProps> {
 			: Fragment
 
 		if (component || canHaveChildren(name)) {
-			children = childNodes.map(this.#parseExpression)
+			children = childNodes.map(node => this.#parseExpression(node, context))
 			if (!component && !canHaveWhitespace(name)) {
 				children = children.filter(child => (
 					typeof child !== 'string' || !/^\s*$/.test(child)
