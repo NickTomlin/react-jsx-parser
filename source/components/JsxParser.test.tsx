@@ -1238,55 +1238,29 @@ describe('JsxParser Component', () => {
 			expect(component.ParsedChildren[0].props.children[1].key).toBeFalsy()
 		})
 	})
-	it('simple sanity', () => {
-		const { html } = render(
-			<JsxParser
-				bindings={{ items: [1] }}
-				jsx={
-					'<div>{items[0]}</div>'
-					// '<div>'
-					// + '{items.map(item => "hi")}'
-					// + '</div>'
-				}
-			/>
-		)
-		console.log(html)
-		expect(html).toEqual('<div class=\"jsx-parser\"><div>1</div></div>')
-	})
 
-	it('simple sanity map', () => {
-		const { html } = render(
-			<JsxParser
-				bindings={{
-					items: [2],
-					identity: (arg) => arg
-				}}
-				jsx={
-					'<div>{items.map(identity)}</div>'
-					// '<div>'
-					// + '{items.map(item => "hi")}'
-					// + '</div>'
-				}
-			/>
-		)
-		console.log(html)
-		expect(html).toEqual('<div class=\"jsx-parser\"><div>2</div></div>')
-	})
-
-	it('supports simple functions that directly return simple values', () => {
+	it('supports arrow functions with nested jsx and implicit return', () => {
 		// https://astexplorer.net/#/gist/fc48b12b8410a4ef779e0477a644bb06/cdbfc8b929b31e11e577dceb88e3a1ee9343f68e
-		const { component, html } = render(
+		const { html } = render(
 			<JsxParser
 				bindings={{ items: [1, 2] }}
-				jsx={
-					'{items.map(item => <p>{item}</p>)}'
-					// '<div>'
-					// + '{items.map(item => "hi")}'
-					// + '</div>'
-				}
-			/>
+				jsx="{items.map(item => <p>{item}</p>)}"
+			/>,
 		)
-		console.log(html)
-		expect(html).toEqual('<div class=\"jsx-parser\"><p>1</p><p>2</p></div>')
+		expect(html).toMatch('<div class="jsx-parser"><p>1</p><p>2</p></div>')
+	})
+
+	it.skip('[NOT IMPLEMENTED: inluded for PR discussion] supports function expressions with nested jsx', () => {
+		// this doesn't work because we need to support
+		// ReturnStatement + BlockStatement
+		// in order to parse the contents
+		// https://astexplorer.net/#/gist/fc48b12b8410a4ef779e0477a644bb06/89e93afa68d5b813cbb5f286d32dd86f47b57b4b
+		const { html } = render(
+			<JsxParser
+				bindings={{ items: [1, 2] }}
+				jsx="{items.map(function (item) { return <p>{item}</p> })}"
+			/>,
+		)
+		expect(html).toMatch('<div class="jsx-parser"><p>1</p><p>2</p></div>')
 	})
 })

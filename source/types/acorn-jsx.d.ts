@@ -17,14 +17,20 @@ declare module 'acorn-jsx' {
 		argument?: Expression;
 	}
 
-	export interface ArrowFunctionExpression extends BaseExpression {
+	interface BaseFunctionExpression extends BaseExpression {
 		async: Boolean
 		generator: Boolean
-		type: 'ArrowFunctionExpression';
 		expression: true;
 		argument?: Expression;
 		body: Expression
 		params: Identifier[]
+	}
+
+  export interface ArrowFunctionExpression extends BaseFunctionExpression {
+		type: 'ArrowFunctionExpression';
+	}
+	export interface FunctionExpression extends BaseFunctionExpression {
+		type: 'FunctionExpression';
 	}
 
 	export interface JSXFragment {
@@ -158,7 +164,8 @@ declare module 'acorn-jsx' {
 		JSXSpreadAttribute | JSXFragment | JSXText |
 		ArrayExpression | BinaryExpression | CallExpression | ConditionalExpression |
 		ExpressionStatement | Identifier | Literal | LogicalExpression | MemberExpression |
-		ObjectExpression | TemplateElement | TemplateLiteral | UnaryExpression | ArrowFunctionExpression
+		ObjectExpression | TemplateElement | TemplateLiteral | UnaryExpression |
+		ArrowFunctionExpression | FunctionExpression
 
 	interface PluginOptions {
 		allowNamespacedObjects?: boolean,
